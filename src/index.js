@@ -4,17 +4,15 @@ const userMoviesService = require("./userMoviesService");
 const S = require("sanctuary");
 const R = require("ramda");
 
-function createElement(template) {
-  const el = document.createElement("template");
-  el.innerHTML = template;
-  return el;
-}
-
-function createMovieElement(createElement, createMovieDetailsResponse, movie) {
-  const movieDetailTemplate = createMovieDetailsResponse(movie);
-
-  return createElement(movieDetailTemplate);
-}
+const createFavoriteMovieTemplate = R.curry(function(ratingsOptions, movie) {
+  return `<li><span>${movie.title}</span> 
+    <select class="movie-rating" data-movie-id="${movie.id}">
+      ${ratingsOptions(movie.rating)}
+    </select> 
+    <a href="#" class="remove-favorite" data-movie-id="${
+      movie.id
+    }">Remove</a></li>`;
+});
 
 function createMoviesElement(createElement, movies, createMovieTemplate) {
   return movies
@@ -25,15 +23,33 @@ function createMoviesElement(createElement, movies, createMovieTemplate) {
     .map(createElement);
 }
 
-function createMoviesNotFoundElement(
+const createElementFromData = R.curry(function(
+  createElement,
+  createTemplate,
+  data
+) {
+  return createElement(createTemplate(data));
+});
+
+const createFavoriteMovieElement = createElementFromData(
+  createElement,
+  createFavoriteMovieTemplate(ratingsOptions)
+);
+
+const createMovieElement = createElementFromData(
+  createElement,
+  createMovieDetailsTemplte
+);
+
+const createMovieNotFoundElement = createElementFromData(
   createElement,
   createMovieNotFoundTemplate
-) {
-  return createElement(createMovieNotFoundTemplate());
-}
+);
 
-function createFavoriteMovieElement(createElement, ratingsOptions, movieId) {
-  return createElement(createFavoriteMovieTemplate(ratingsOptions, movieId));
+function createElement(template) {
+  const el = document.createElement("template");
+  el.innerHTML = template;
+  return el;
 }
 
 function clearElement(id) {
@@ -50,25 +66,17 @@ function createGenresTemplate(genres) {
 
 function displayFavoriteMovies(
   favorites,
-  createElement,
-  ratingsOptions,
   appendElementToParent,
   createFavoriteMovieElement
 ) {
-  document.getElementById("favorites").innerHTML = "";
+  clearElement("favorites");
   Object.keys(favorites)
-    .map(movieId =>
-      createFavoriteMovieElement(createElement, ratingsOptions, movieId)
-    )
+    .map(movie => createFavoriteMovieElement(favorites[movie]))
     .forEach(el => appendElementToParent("favorites", el));
 }
 
 function displayMovieDetails(movie) {
-  const el = createMovieElement(
-    createElement,
-    createMovieDetailsResponse,
-    movie
-  );
+  const el = createMovieElement(movie);
   addElementToBody({
     el,
     isElementOnPage,
@@ -77,9 +85,9 @@ function displayMovieDetails(movie) {
 }
 
 function processSearchResponse({
-  createElement,
   response,
   clearElement,
+  createElement,
   appendElementToParent
 }) {
   clearElement("foundMovies");
@@ -90,24 +98,11 @@ function processSearchResponse({
           response.results,
           createMovieTemplate
         )
-      : [
-          createMoviesNotFoundElement(
-            createElement,
-            createMovieNotFoundTemplate
-          )
-        ];
+      : [createMovieNotFoundElement({})];
   elements.forEach(el => appendElementToParent("foundMovies", el));
 }
 
-function createFavoriteMovieTemplate(ratingsOptions, movieId) {
-  return `<li><span>${
-    userMoviesService.loadSavedMovies()[movieId].title
-  }</span> <select class="movie-rating" data-movie-id="${movieId}">${ratingsOptions(
-    userMoviesService.loadSavedMovies()[movieId].rating
-  )}</select> <a href="#" class="remove-favorite" data-movie-id="${movieId}">Remove</a></li>`;
-}
-
-function createMovieDetailsResponse(movie) {
+function createMovieDetailsTemplte(movie) {
   return `
     <div class="movie-detail" data-movie-id="${movie.id}">
       <p><strong>${movie.original_title}</strong></p>
@@ -115,7 +110,7 @@ function createMovieDetailsResponse(movie) {
       <p>
         <em>Genres:</em>
         <ul>
-          ${displayGenres(movie.id, movie.genres)}
+          ${createGenresTemplate(movie.genres)}
         </ul>
       </p>
       <p>
@@ -221,9 +216,12 @@ $(document).on("click", ".btn-favorite", function() {
   const movieKey = $(this).data("movie-id");
   if (!userMoviesService.loadSavedMovies()[movieKey]) {
     const title = $(this).data("movie-title");
-    userMoviesService.loadSavedMovies()[movieKey] = { title };
     userMoviesService.addFavorite(movieKey, title);
-    displayFavoriteMovies();
+    displayFavoriteMovies(
+      userMoviesService.loadSavedMovies(),
+      appendElementToParent,
+      createFavoriteMovieElement
+    );
   }
   $(this)
     .closest("div")
@@ -239,8 +237,6 @@ $(document).on("click", ".remove-favorite", function(e) {
   userMoviesService.removeFavorite(movieId);
   displayFavoriteMovies(
     userMoviesService.loadSavedMovies(),
-    createElement,
-    ratingsOptions,
     appendElementToParent,
     createFavoriteMovieElement
   );
@@ -255,8 +251,6 @@ $(document).on("change", ".movie-rating", function() {
 window.onload = function() {
   displayFavoriteMovies(
     userMoviesService.loadSavedMovies(),
-    createElement,
-    ratingsOptions,
     appendElementToParent,
     createFavoriteMovieElement
   );

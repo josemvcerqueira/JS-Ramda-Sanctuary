@@ -1,13 +1,13 @@
-'use strict';
+"use strict";
 
-const FAVORITE_MOVIES = 'favoriteMovies';
+const FAVORITE_MOVIES = "favoriteMovies";
 
 function saveFavorites(favorites) {
-  localStorage[FAVORITE_MOVIES] = JSON.stringify(favorites);
+  localStorage.setItem(FAVORITE_MOVIES, JSON.stringify(favorites));
 }
 
 function loadSavedMovies() {
-  const data = localStorage[FAVORITE_MOVIES] || '{}';
+  const data = localStorage.getItem(FAVORITE_MOVIES) || {};
   return JSON.parse(data);
 }
 
@@ -35,4 +35,4 @@ module.exports = {
   addFavorite,
   saveFavorites,
   rateMovie
-}
+};
