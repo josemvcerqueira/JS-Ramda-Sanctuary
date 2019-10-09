@@ -4,6 +4,7 @@ const userMoviesService = require("./userMoviesService");
 const S = require("sanctuary");
 const R = require("ramda");
 
+// createFavoriteMovieTemplate :: (Number -> [String]) -> Movie -> String
 const createFavoriteMovieTemplate = R.curry(function(ratingsOptions, movie) {
   return `<li><span>${movie.title}</span> 
     <select class="movie-rating" data-movie-id="${movie.id}">
@@ -14,15 +15,21 @@ const createFavoriteMovieTemplate = R.curry(function(ratingsOptions, movie) {
     }">Remove</a></li>`;
 });
 
-function createMoviesElement(createElement, movies, createMovieTemplate) {
-  return movies
-    .filter(
-      movie => movie.poster_path !== null && movie.poster_path !== undefined
-    )
-    .map(createMovieTemplate)
-    .map(createElement);
-}
+const log = R.curry((prefix, data) => console.log(prefix, data));
 
+// isNotNil :: a -> Boolean
+const isNotNil = S.pipe([S.isNothing, S.not]);
+
+// hasPoster :: Movie -> Boolean
+const hasPoster = S.pipe([S.prop("poster_path"), S.Just, isNotNil]);
+
+const createMoviesElements = R.compose(
+  R.map(createElement),
+  R.map(createMovieTemplate),
+  R.filter(hasPoster)
+);
+
+// createElementFromData :: (String -> HTMLElement) -> (Object -> String) -> Object -> HTMLElement
 const createElementFromData = R.curry(function(
   createElement,
   createTemplate,
@@ -31,16 +38,19 @@ const createElementFromData = R.curry(function(
   return createElement(createTemplate(data));
 });
 
+// createFavoriteMovieElement :: FavoriteMovie -> HTMLElement
 const createFavoriteMovieElement = createElementFromData(
   createElement,
   createFavoriteMovieTemplate(ratingsOptions)
 );
 
+// createMovieElement :: Movie -> HTMLElement
 const createMovieElement = createElementFromData(
   createElement,
   createMovieDetailsTemplte
 );
 
+// createMovieNotFoundElement :: Object -> HTMLElement
 const createMovieNotFoundElement = createElementFromData(
   createElement,
   createMovieNotFoundTemplate
@@ -60,9 +70,10 @@ function appendElementToParent(parent, el) {
   document.getElementById(parent).appendChild(el.content.firstElementChild);
 }
 
-function createGenresTemplate(genres) {
-  return genres.map(genre => `<li>${genre.name}</li>`).join("");
-}
+const createGenresTemplate = R.compose(
+  R.join(""),
+  R.map(genre => `<li>${genre.name}</li>`)
+);
 
 function displayFavoriteMovies(
   favorites,
@@ -87,17 +98,12 @@ function displayMovieDetails(movie) {
 function processSearchResponse({
   response,
   clearElement,
-  createElement,
   appendElementToParent
 }) {
   clearElement("foundMovies");
   const elements =
     response.total_results > 0
-      ? createMoviesElement(
-          createElement,
-          response.results,
-          createMovieTemplate
-        )
+      ? createMoviesElements(response.results)
       : [createMovieNotFoundElement({})];
   elements.forEach(el => appendElementToParent("foundMovies", el));
 }
@@ -166,17 +172,21 @@ function removeElement(className) {
   document.getElementsByClassName(className)[0].remove();
 }
 
-// function isDetailsBeingDisplayed() {
-//   return ;
-// }
+// reservedRange :: Number -> Number -> [Number]
+const reservedRange = R.compose(
+  R.reverse,
+  R.range
+);
+
+const reservedRangeArr = r =>
+  R.map(i => `<option ${i == r ? "selected" : ""}>${i}</option>`);
 
 function ratingsOptions(r) {
-  return [
-    "<option>Rate this movie</option>",
-    ...S.range(1)(11)
-      .reverse()
-      .map(i => `<option ${i == r ? "selected" : ""}>${i}</option>`)
-  ];
+  return R.compose(
+    R.concat("<option>Rate this movie</option>"),
+    reservedRangeArr(r),
+    reservedRange(1, 11)
+  );
 }
 
 $(document).on("click", ".movie img, .movie p", e => {
