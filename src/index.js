@@ -1,6 +1,40 @@
 const apiKey = require("./apiKey");
 const $ = require("jquery");
 const userMoviesService = require("./userMoviesService");
+const S = require("sanctuary");
+const R = require("ramda");
+
+function createElement(template) {
+  const el = document.createElement("template");
+  el.innerHTML = template;
+  return el;
+}
+
+function createMovieElement(createElement, createMovieDetailsResponse, movie) {
+  const movieDetailTemplate = createMovieDetailsResponse(movie);
+
+  return createElement(movieDetailTemplate);
+}
+
+function createMoviesElement(createElement, movies, createMovieTemplate) {
+  return movies
+    .filter(
+      movie => movie.poster_path !== null && movie.poster_path !== undefined
+    )
+    .map(createMovieTemplate)
+    .map(createElement);
+}
+
+function createMoviesNotFoundElement(
+  createElement,
+  createMovieNotFoundTemplate
+) {
+  return createElement(createMovieNotFoundTemplate());
+}
+
+function createFavoriteMovieElement(createElement, ratingsOptions, movieId) {
+  return createElement(createFavoriteMovieTemplate(ratingsOptions, movieId));
+}
 
 function clearElement(id) {
   document.getElementById(id).innerHTML = "";
@@ -10,49 +44,67 @@ function appendElementToParent(parent, el) {
   document.getElementById(parent).appendChild(el.content.firstElementChild);
 }
 
-function createMoviesElement({ movies, createMovieTemplate, createElement }) {
-  return movies
-    .filter(
-      movie => movie.poster_path !== null && movie.poster_path !== undefined
+function createGenresTemplate(genres) {
+  return genres.map(genre => `<li>${genre.name}</li>`).join("");
+}
+
+function displayFavoriteMovies(
+  favorites,
+  createElement,
+  ratingsOptions,
+  appendElementToParent,
+  createFavoriteMovieElement
+) {
+  document.getElementById("favorites").innerHTML = "";
+  Object.keys(favorites)
+    .map(movieId =>
+      createFavoriteMovieElement(createElement, ratingsOptions, movieId)
     )
-    .map(createMovieTemplate)
-    .map(createElement);
+    .forEach(el => appendElementToParent("favorites", el));
 }
 
-function createMovieTemplate(movie) {
-  return `
-          <div class="movie" data-movie-id="${movie.id}">
-            <p><strong>${movie.original_title}</strong></p>
-            <img src="https://image.tmdb.org/t/p/w185${movie.poster_path}" />
-            <p>
-              <em>Year</em>: ${movie.release_date.substring(0, 4)}
-            </p>
-          </div>
-        `;
-}
-
-function createMoviesNotFoundElement(createElement) {
-  const template = `<strong>I'm sorry, we could not found the movie you were looking for<strong>`;
-  return createElement(template);
+function displayMovieDetails(movie) {
+  const el = createMovieElement(
+    createElement,
+    createMovieDetailsResponse,
+    movie
+  );
+  addElementToBody({
+    el,
+    isElementOnPage,
+    removeElement
+  });
 }
 
 function processSearchResponse({
+  createElement,
   response,
   clearElement,
-  createElement,
   appendElementToParent
 }) {
   clearElement("foundMovies");
   const elements =
     response.total_results > 0
-      ? createMoviesElement({
-          movies: response.results,
-          results: response.total_results,
-          createMovieTemplate,
-          createElement
-        })
-      : [createMoviesNotFoundElement(createElement)];
+      ? createMoviesElement(
+          createElement,
+          response.results,
+          createMovieTemplate
+        )
+      : [
+          createMoviesNotFoundElement(
+            createElement,
+            createMovieNotFoundTemplate
+          )
+        ];
   elements.forEach(el => appendElementToParent("foundMovies", el));
+}
+
+function createFavoriteMovieTemplate(ratingsOptions, movieId) {
+  return `<li><span>${
+    userMoviesService.loadSavedMovies()[movieId].title
+  }</span> <select class="movie-rating" data-movie-id="${movieId}">${ratingsOptions(
+    userMoviesService.loadSavedMovies()[movieId].rating
+  )}</select> <a href="#" class="remove-favorite" data-movie-id="${movieId}">Remove</a></li>`;
 }
 
 function createMovieDetailsResponse(movie) {
@@ -82,22 +134,6 @@ function createMovieDetailsResponse(movie) {
   `;
 }
 
-function createMovieElement({
-  createElement,
-  createMovieDetailsResponse,
-  movie
-}) {
-  const movieDetailTemplate = createMovieDetailsResponse(movie);
-
-  return createElement(movieDetailTemplate);
-}
-
-function createElement(template) {
-  const el = document.createElement("template");
-  el.innerHTML = template;
-  return el;
-}
-
 function addElementToBody({ el, isElementOnPage, removeElement }) {
   if (isElementOnPage("movie-detail")) {
     removeElement("className");
@@ -109,6 +145,22 @@ function addElementToBody({ el, isElementOnPage, removeElement }) {
     },
     300
   );
+}
+
+function createMovieTemplate(movie) {
+  return `
+          <div class="movie" data-movie-id="${movie.id}">
+            <p><strong>${movie.original_title}</strong></p>
+            <img src="https://image.tmdb.org/t/p/w185${movie.poster_path}" />
+            <p>
+              <em>Year</em>: ${movie.release_date.substring(0, 4)}
+            </p>
+          </div>
+        `;
+}
+
+function createMovieNotFoundTemplate() {
+  return `<strong>I'm sorry, we could not found the movie you were looking for<strong>`;
 }
 
 function isElementOnPage(className) {
@@ -123,41 +175,13 @@ function removeElement(className) {
 //   return ;
 // }
 
-function displayGenres(genres) {
-  return genres.map(genre => `<li>${genre.name}</li>`).join("");
-}
-
 function ratingsOptions(r) {
-  let ratings = "<option>Rate this movie</option>";
-  for (let i = 10; i > 0; i--) {
-    ratings += `<option ${i == r ? "selected" : ""}>${i}</option>`;
-  }
-  return ratings;
-}
-
-function displayFavoriteMovies(
-  favorites,
-  createElement,
-  ratingsOptions,
-  appendElementToParent,
-  createFavoriteMovieElement
-) {
-  document.getElementById("favorites").innerHTML = "";
-  Object.keys(favorites)
-    .map(movieId =>
-      createFavoriteMovieElement(createElement, ratingsOptions, movieId)
-    )
-    .forEach(el => appendElementToParent("favorites", el));
-}
-
-function createFavoriteMovieElement(createElement, ratingsOptions, movieId) {
-  return createElement(
-    `<li><span>${
-      userMoviesService.loadSavedMovies()[movieId].title
-    }</span> <select class="movie-rating" data-movie-id="${movieId}">${ratingsOptions(
-      userMoviesService.loadSavedMovies()[movieId].rating
-    )}</select> <a href="#" class="remove-favorite" data-movie-id="${movieId}">Remove</a></li>`
-  );
+  return [
+    "<option>Rate this movie</option>",
+    ...S.range(1)(11)
+      .reverse()
+      .map(i => `<option ${i == r ? "selected" : ""}>${i}</option>`)
+  ];
 }
 
 $(document).on("click", ".movie img, .movie p", e => {
@@ -166,16 +190,7 @@ $(document).on("click", ".movie img, .movie p", e => {
     .closest(".movie")
     .data("movie-id")}?api_key=${apiKey}`;
   $.getJSON(movieDetailsUrl, response => {
-    const el = createMovieElement({
-      createMovieDetailsResponse,
-      movie: response,
-      createElement
-    });
-    addElementToBody({
-      el,
-      isElementOnPage,
-      removeElement
-    });
+    displayMovieDetails(response);
   });
 });
 
